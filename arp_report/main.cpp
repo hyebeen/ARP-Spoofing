@@ -14,7 +14,7 @@ int main()
     pcap_t *handle;
     char *dev = "wlan0";
     u_char req_packet[42];
-    int i = 0, j = 0;
+    int i = 0;
     char errbuf[PCAP_ERRBUF_SIZE];
     handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
     if (handle == NULL) {

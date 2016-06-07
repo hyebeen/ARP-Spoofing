@@ -185,8 +185,8 @@ void relay(pcap_t *handle, u_int8_t *sender_mac, u_int8_t *receivcer_mac)
         {
             if (memcmp(ethernet_hdr->ether_shost, sender_mac, 6) == 0)
             {
-                memcpy(my_mac, ethernet_hdr->ether_shost, 6);
-                memcpy(receivcer_mac, ethernet_hdr->ether_dhost, 6);
+                memcpy(ethernet_hdr->ether_shost, my_mac, 6);
+                memcpy(ethernet_hdr->ether_dhost, receivcer_mac, 6);
                 if (pcap_sendpacket(handle, packet, pcap_header.caplen) != 0)
                 {
                     printf("relay error\n");
@@ -198,8 +198,8 @@ void relay(pcap_t *handle, u_int8_t *sender_mac, u_int8_t *receivcer_mac)
             }
             else if (memcmp(ethernet_hdr->ether_shost, receivcer_mac, 6) == 0)
             {
-                memcpy(my_mac, ethernet_hdr->ether_shost, 6);
-                memcpy(sender_mac, ethernet_hdr->ether_dhost, 6);
+                memcpy(ethernet_hdr->ether_shost, my_mac, 6);
+                memcpy(ethernet_hdr->ether_dhost, sender_mac, 6);
                 if (pcap_sendpacket(handle, packet, pcap_header.caplen) != 0)
                 {
                     printf("relay error\n");
